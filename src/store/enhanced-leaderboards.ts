@@ -82,6 +82,13 @@ export class EnhancedLeaderboardStore {
     return Array.from(this.leaderboards.keys());
   }
 
+  /**
+   * Get all leaderboards as a map
+   */
+  getAllLeaderboards(): Map<string, LeaderboardEntry[]> {
+    return new Map(this.leaderboards);
+  }
+
   // ══════════════════════════════════════════════════════════════════════
   // PRICE LEADERBOARDS
   // ══════════════════════════════════════════════════════════════════════
@@ -147,12 +154,14 @@ export class EnhancedLeaderboardStore {
     markets: UnifiedMarket[],
     metrics: Map<string, DerivedMetrics>
   ): void {
+    // Filter out markets with no volume surge data (value = 1.0 means no surge)
+    // This prevents showing misleading zero/empty data when trade subscriptions aren't active
     const entries = this.createEntriesWithMetrics(
       markets,
       metrics,
       (m) => m.volumeSurge15m || 1.0,
       (a, b) => b.value - a.value
-    );
+    ).filter((e) => e.value > 1.0); // Only show actual surges (> 1.0)
     this.leaderboards.set("volume_surge", entries);
   }
 

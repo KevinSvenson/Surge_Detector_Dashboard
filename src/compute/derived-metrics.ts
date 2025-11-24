@@ -2,6 +2,13 @@
  * Derived Metrics Calculator
  * 
  * Calculates derived metrics from raw market data and rolling windows.
+ * 
+ * DATA QUALITY NOTES:
+ * - Price-based metrics (priceChange, priceVelocity, priceAcceleration) work with ticker data ✓
+ * - Volume-based metrics (CVD, volumeSurge, takerBuyRatio) require trade subscriptions ✗
+ * - Volume windows are only populated when trade events are received via updateTrade()
+ * - Currently, trade subscriptions are not implemented, so volume metrics will be 0
+ * - Leaderboards that depend on volume metrics should filter out zero values
  */
 
 import type { UnifiedMarket } from "../types/unified.js";

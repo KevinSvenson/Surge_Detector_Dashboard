@@ -4,6 +4,7 @@
  * Manages derived metrics computation and storage.
  */
 
+import { EventEmitter } from "eventemitter3";
 import type { UnifiedMarket, UnifiedTrade } from "../types/unified.js";
 import type { DerivedMetrics } from "../types/unified.js";
 import { calculateDerivedMetrics, type MetricsContext } from "./derived-metrics.js";
@@ -16,7 +17,7 @@ import {
 import { getConfig } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
 
-export class MetricsManager {
+export class MetricsManager extends EventEmitter {
   private metrics: Map<string, DerivedMetrics> = new Map();
   private contexts: Map<string, MetricsContext> = new Map();
   private computeInterval: NodeJS.Timeout | null = null;
@@ -70,6 +71,13 @@ export class MetricsManager {
 
   /**
    * Update trade data in rolling windows
+   * 
+   * NOTE: This method is only called when trade subscriptions are active.
+   * Currently, connectors do not implement subscribeToTrades(), so this
+   * method is never called, and volume windows remain empty.
+   * 
+   * When trade subscriptions are implemented, connectors should emit 'trade'
+   * events that trigger this method.
    */
   updateTrade(trade: UnifiedTrade): void {
     const context = this.contexts.get(trade.id.split(":")[0] + ":" + trade.symbol);
@@ -110,6 +118,17 @@ export class MetricsManager {
       count: this.metrics.size,
       durationMs: duration,
     });
+    
+    // Emit event for tracking
+    this.emit("computed", { timestamp: Date.now(), count: this.metrics.size });
+  }
+
+  /**
+   * Get last computation timestamp
+   */
+  getLastComputeTime(): number | null {
+    // This will be set by the event listener in index.ts
+    return null; // Will be tracked externally
   }
 
   /**

@@ -194,6 +194,41 @@ Building a real-time crypto derivatives screener backend that:
 - Updated `src/api/server.ts` - New endpoints for metrics, signals, aggregated, arbitrage
 - Updated `src/index.ts` - Integrated metrics computation and aggregation
 
+### Phase 1.5: API Enhancements & Data Quality (Week 4.5)
+**Status:** ✅ COMPLETE
+
+**Tasks:**
+1. ✅ Add WebSocket API for Real-Time Updates
+   - Success Criteria: WebSocket server starts, clients can subscribe, market/leaderboard updates broadcast
+   - **Completed:** Full WebSocket API with subscription channels, throttled broadcasting (100ms), ping/pong health checks
+2. ✅ Add `/api/status` Endpoint
+   - Success Criteria: Comprehensive status endpoint with exchange health, data quality, performance metrics
+   - **Completed:** Status endpoint with exchange states, uptime, memory usage, data quality indicators
+3. ✅ Configure CORS for Frontend
+   - Success Criteria: CORS headers properly configured, OPTIONS preflight handled, configurable origins
+   - **Completed:** Enhanced CORS with environment variable support, proper preflight handling
+4. ✅ Metrics Data Quality Audit
+   - Success Criteria: Documented which metrics work, which require trade data, graceful handling of missing data
+   - **Completed:** Added documentation, data quality indicators in status endpoint, leaderboards filter zero values
+
+**Success Criteria for Phase 1.5:**
+- ✅ WebSocket server running on `/ws` path
+- ✅ Clients can subscribe to markets, leaderboards, signals channels
+- ✅ Market updates broadcast at 100ms intervals (batched)
+- ✅ Leaderboard updates broadcast when recomputed
+- ✅ `/api/status` returns comprehensive system health
+- ✅ CORS configured for frontend development
+- ✅ Data quality documented and indicated in API responses
+
+**Files Created:**
+- `src/api/websocket.ts` - WebSocket server with subscription management
+- `src/types/websocket.ts` - WebSocket message types
+- Updated `src/api/server.ts` - Enhanced CORS, status endpoint, WebSocket stats
+- Updated `src/index.ts` - WebSocket integration, market/leaderboard broadcasting
+- Updated `src/compute/metrics-manager.ts` - EventEmitter for computation tracking
+- Updated `src/store/enhanced-leaderboards.ts` - Filter zero values in volume surge leaderboard
+- Updated `src/connectors/*/index.ts` - Documentation for trade subscription limitations
+
 ### Phase 2: Expansion & Hardening (Week 5-6)
 **Status:** Not Started
 
@@ -211,12 +246,13 @@ Building a real-time crypto derivatives screener backend that:
 - [x] Phase 1B: Add Binance ✅
 - [ ] Phase 1C: Add Hyperliquid
 - [x] Phase 1D: Full Metrics & Leaderboards ✅
+- [x] Phase 1.5: API Enhancements & Data Quality ✅
 - [ ] Phase 2: Expansion & Hardening
 
 ## Current Status / Progress Tracking
 
-**Current Phase:** Phase 1D - Full Metrics & Leaderboards ✅ COMPLETE
-**Last Updated:** Phase 1D implementation completed
+**Current Phase:** Phase 1.5 - API Enhancements & Data Quality ✅ COMPLETE
+**Last Updated:** Phase 1.5 implementation completed (WebSocket API, Status endpoint, CORS, Data Quality Audit)
 
 **Phase 1A Deliverables:**
 - ✅ Bybit WebSocket Connection Manager with auto-reconnect

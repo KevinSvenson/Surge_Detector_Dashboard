@@ -229,8 +229,26 @@ export class BinanceConnector extends EventEmitter implements ExchangeConnector 
     logger.warn("Order book subscriptions not implemented in Phase 1B");
   }
 
+  /**
+   * Subscribe to trade events.
+   * 
+   * NOTE: Trade subscriptions are not yet implemented.
+   * This means metrics that depend on trade data will be zero or unavailable:
+   * - CVD (Cumulative Volume Delta) - all timeframes
+   * - Taker buy ratio - all timeframes
+   * - Volume surge - requires trade volume data
+   * - Volume windows (1m, 5m, 15m, 1h) - not populated
+   * 
+   * Metrics that work with ticker data only:
+   * - Price changes (1m, 5m, 15m, 1h) ✓
+   * - Price velocity and acceleration ✓
+   * - Funding rates ✓
+   * - Spread metrics ✓
+   * 
+   * To implement: Subscribe to Binance {symbol}@aggTrade WebSocket streams.
+   */
   async subscribeToTrades(_symbols: string[]): Promise<void> {
-    logger.warn("Trade subscriptions not implemented in Phase 1B");
+    logger.warn("Trade subscriptions not implemented - CVD, volume surge, and taker buy ratio metrics will be unavailable");
   }
 
   async subscribeToLiquidations(_symbols: string[]): Promise<void> {

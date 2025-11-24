@@ -14,6 +14,7 @@ import { EnhancedLeaderboardStore } from "./store/enhanced-leaderboards.js";
 import { MetricsManager } from "./compute/metrics-manager.js";
 import { aggregateMarketsBySymbol } from "./compute/cross-exchange.js";
 import { ApiServer } from "./api/server.js";
+import { WebSocketAPI } from "./api/websocket.js";
 import { getTopBybitSymbols } from "./connectors/bybit/symbols.js";
 import { getTopBinanceSymbols } from "./connectors/binance/rest.js";
 import type { UnifiedMarket } from "./types/unified.js";
@@ -26,9 +27,17 @@ const enhancedLeaderboardStore = new EnhancedLeaderboardStore();
 const metricsManager = new MetricsManager();
 const aggregatedStore = new Map<string, AggregatedMarket>();
 
+// System metrics tracking
+const systemStartTime = Date.now();
+let lastMetricsCompute: number | null = null;
+let lastLeaderboardUpdate: number | null = null;
+
 // Connectors
 const bybitConnector = new BybitConnector();
 const binanceConnector = new BinanceConnector();
+
+// WebSocket API
+const wsAPI = new WebSocketAPI();
 
 // API server
 const apiServer = new ApiServer({
@@ -40,6 +49,12 @@ const apiServer = new ApiServer({
   aggregatedStore,
   bybitConnector,
   binanceConnector,
+  getSystemMetrics: () => ({
+    startTime: systemStartTime,
+    lastMetricsCompute,
+    lastLeaderboardUpdate,
+  }),
+  getWebSocketStats: () => wsAPI.getStats(),
 });
 
 // Update intervals
@@ -78,9 +93,22 @@ async function main() {
 
   // Start metrics computation
   metricsManager.start();
+  
+  // Track metrics computation time
+  metricsManager.on("computed", () => {
+    lastMetricsCompute = Date.now();
+  });
 
   // Start API server
   await apiServer.start();
+
+  // Start WebSocket server (attached to HTTP server)
+  const httpServer = apiServer.getServer();
+  if (httpServer) {
+    wsAPI.start(httpServer);
+  } else {
+    logger.error("Failed to get HTTP server for WebSocket attachment");
+  }
 
   // Start leaderboard updates
   startLeaderboardUpdates();
@@ -108,6 +136,8 @@ function setupBybitHandlers(): void {
     marketStore.set(market);
     // Update metrics manager
     metricsManager.updateMarket(market);
+    // Broadcast to WebSocket subscribers
+    wsAPI.broadcastMarket(market);
   });
 
   // Handle connection state changes
@@ -133,6 +163,8 @@ function setupBinanceHandlers(): void {
     marketStore.set(market);
     // Update metrics manager
     metricsManager.updateMarket(market);
+    // Broadcast to WebSocket subscribers
+    wsAPI.broadcastMarket(market);
   });
 
   // Handle connection state changes
@@ -268,6 +300,15 @@ function updateLeaderboards(): void {
   
   // Update enhanced leaderboards
   enhancedLeaderboardStore.update(markets, metrics);
+  
+  // Broadcast leaderboard updates to WebSocket subscribers
+  const allLeaderboards = enhancedLeaderboardStore.getAllLeaderboards();
+  for (const [name, entries] of allLeaderboards.entries()) {
+    wsAPI.broadcastLeaderboard(name, entries);
+  }
+  
+  // Track update time
+  lastLeaderboardUpdate = Date.now();
 }
 
 /**

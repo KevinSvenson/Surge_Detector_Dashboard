@@ -22,6 +22,15 @@ interface ApiServerOptions {
   aggregatedStore?: Map<string, AggregatedMarket>;
   bybitConnector?: unknown; // ExchangeConnector type
   binanceConnector?: unknown; // ExchangeConnector type
+  getSystemMetrics?: () => {
+    startTime: number;
+    lastMetricsCompute: number | null;
+    lastLeaderboardUpdate: number | null;
+  };
+  getWebSocketStats?: () => {
+    clientCount: number;
+    totalSubscriptions: number;
+  };
 }
 
 export class ApiServer {
@@ -34,6 +43,15 @@ export class ApiServer {
   private aggregatedStore?: Map<string, AggregatedMarket>;
   private bybitConnector?: unknown;
   private binanceConnector?: unknown;
+  private getSystemMetrics?: () => {
+    startTime: number;
+    lastMetricsCompute: number | null;
+    lastLeaderboardUpdate: number | null;
+  };
+  private getWebSocketStats?: () => {
+    clientCount: number;
+    totalSubscriptions: number;
+  };
 
   constructor(options: ApiServerOptions) {
     this.port = options.port;
@@ -44,6 +62,8 @@ export class ApiServer {
     this.aggregatedStore = options.aggregatedStore;
     this.bybitConnector = options.bybitConnector;
     this.binanceConnector = options.binanceConnector;
+    this.getSystemMetrics = options.getSystemMetrics;
+    this.getWebSocketStats = options.getWebSocketStats;
   }
 
   /**
@@ -72,6 +92,13 @@ export class ApiServer {
   }
 
   /**
+   * Get the HTTP server instance (for WebSocket attachment)
+   */
+  getServer(): ReturnType<typeof createServer> | null {
+    return this.server;
+  }
+
+  /**
    * Stop the API server.
    */
   stop(): Promise<void> {
@@ -94,13 +121,11 @@ export class ApiServer {
     const startTime = Date.now();
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
 
-    // Enable CORS
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    // Set CORS headers
+    this.setCorsHeaders(req, res);
 
     if (req.method === "OPTIONS") {
-      res.writeHead(200);
+      res.writeHead(204); // No Content for preflight
       res.end();
       return;
     }
@@ -111,6 +136,8 @@ export class ApiServer {
         this.handleRoot(req, res);
       } else if (url.pathname === "/health") {
         this.handleHealth(req, res);
+      } else if (url.pathname === "/api/status" || url.pathname === "/status") {
+        this.handleStatus(req, res);
       } else if (url.pathname === "/markets") {
         this.handleMarkets(req, res, url);
       } else if (url.pathname.startsWith("/markets/")) {
@@ -586,6 +613,224 @@ export class ApiServer {
         message: error.message,
       })
     );
+  }
+
+  /**
+   * Set CORS headers based on configuration.
+   */
+  private setCorsHeaders(req: IncomingMessage, res: ServerResponse): void {
+    const allowedOrigins = process.env.CORS_ORIGINS
+      ? process.env.CORS_ORIGINS.split(",").map((o) => o.trim())
+      : ["*"];
+
+    const requestOrigin = req.headers.origin;
+
+    // Determine allowed origin
+    let origin = "*";
+    if (allowedOrigins.includes("*")) {
+      origin = "*";
+    } else if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+      origin = requestOrigin;
+    } else if (allowedOrigins.length > 0) {
+      origin = allowedOrigins[0]; // Default to first allowed origin
+    }
+
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, OPTIONS"
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With"
+    );
+    res.setHeader("Access-Control-Max-Age", "86400"); // 24 hours preflight cache
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+
+  /**
+   * Comprehensive status endpoint.
+   */
+  private handleStatus(
+    _req: IncomingMessage,
+    res: ServerResponse
+  ): void {
+    const stats = this.marketStore.getStats();
+    const systemMetrics = this.getSystemMetrics?.() || {
+      startTime: Date.now(),
+      lastMetricsCompute: null,
+      lastLeaderboardUpdate: null,
+    };
+
+    // Get exchange health
+    let bybitHealth = null;
+    if (this.bybitConnector && typeof this.bybitConnector === "object" && this.bybitConnector !== null) {
+      const connector = this.bybitConnector as { getHealth?: () => unknown };
+      if (typeof connector.getHealth === "function") {
+        bybitHealth = connector.getHealth();
+      }
+    }
+
+    let binanceHealth = null;
+    if (this.binanceConnector && typeof this.binanceConnector === "object" && this.binanceConnector !== null) {
+      const connector = this.binanceConnector as { getHealth?: () => unknown };
+      if (typeof connector.getHealth === "function") {
+        binanceHealth = connector.getHealth();
+      }
+    }
+
+    // Determine exchange connection states
+    const bybitState = this.getConnectionState(this.bybitConnector);
+    const binanceState = this.getConnectionState(this.binanceConnector);
+
+    // Build exchanges object
+    const exchanges: Record<string, unknown> = {};
+
+    if (bybitHealth) {
+      const health = bybitHealth as {
+        isConnected: boolean;
+        subscriptionCount: number;
+        messageRate: number;
+        lastMessageTime: number;
+        reconnectCount: number;
+        errors: Array<{ message: string }>;
+      };
+      exchanges.bybit = {
+        enabled: true,
+        connected: health.isConnected,
+        connectionState: bybitState,
+        subscriptions: health.subscriptionCount,
+        messageRate: health.messageRate,
+        lastMessageAt: health.lastMessageTime || null,
+        lastError: health.errors.length > 0 ? health.errors[health.errors.length - 1].message : null,
+        reconnectCount: health.reconnectCount,
+      };
+    }
+
+    if (binanceHealth) {
+      const health = binanceHealth as {
+        isConnected: boolean;
+        subscriptionCount: number;
+        messageRate: number;
+        lastMessageTime: number;
+        reconnectCount: number;
+        errors: Array<{ message: string }>;
+      };
+      exchanges.binance = {
+        enabled: true,
+        connected: health.isConnected,
+        connectionState: binanceState,
+        subscriptions: health.subscriptionCount,
+        messageRate: health.messageRate,
+        lastMessageAt: health.lastMessageTime || null,
+        lastError: health.errors.length > 0 ? health.errors[health.errors.length - 1].message : null,
+        reconnectCount: health.reconnectCount,
+      };
+    }
+
+    // Determine overall status
+    const exchangeHealth = Object.values(exchanges) as Array<{
+      enabled: boolean;
+      connected: boolean;
+    }>;
+    const connectedCount = exchangeHealth.filter((e) => e.connected).length;
+    const enabledCount = exchangeHealth.filter((e) => e.enabled).length;
+
+    let overallStatus: "healthy" | "degraded" | "unhealthy" = "unhealthy";
+    if (connectedCount === enabledCount && enabledCount > 0) {
+      overallStatus = "healthy";
+    } else if (connectedCount > 0) {
+      overallStatus = "degraded";
+    }
+
+    // Get leaderboard names
+    const leaderboardsAvailable = this.enhancedLeaderboardStore
+      ? this.enhancedLeaderboardStore.getAvailableLeaderboards()
+      : this.leaderboardStore.getAvailableLeaderboards();
+
+    // Get metrics count
+    const metricsCount = this.getMetricsStore?.()?.size || 0;
+
+    // Memory usage
+    const memoryUsage = process.memoryUsage();
+    const memoryUsageMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
+
+    const response = {
+      status: overallStatus,
+      uptime: Math.floor((Date.now() - systemMetrics.startTime) / 1000), // seconds
+      timestamp: Date.now(),
+
+      exchanges,
+
+      data: {
+        totalMarkets: stats.totalMarkets,
+        freshMarkets: stats.totalMarkets - stats.staleMarkets,
+        staleMarkets: stats.staleMarkets,
+        marketsByExchange: stats.marketsByExchange,
+      },
+
+      compute: {
+        metricsCount,
+        lastMetricsCompute: systemMetrics.lastMetricsCompute,
+        leaderboardsAvailable,
+        lastLeaderboardUpdate: systemMetrics.lastLeaderboardUpdate,
+      },
+
+      dataQuality: {
+        tradeDataAvailable: false, // Trade subscriptions not implemented
+        metricsWithRealData: [
+          "priceChange",
+          "priceVelocity",
+          "priceAcceleration",
+          "funding",
+          "spread",
+          "openInterest",
+        ],
+        metricsWithLimitedData: [
+          "cvd",
+          "volumeSurge",
+          "takerBuyRatio",
+          "volume1m",
+          "volume5m",
+          "volume15m",
+          "volume1h",
+        ],
+        note: "Volume-based metrics require trade subscriptions, which are not yet implemented. These metrics will show zero values.",
+      },
+
+      websocket: {
+        enabled: true,
+        ...(this.getWebSocketStats?.() || { clientCount: 0, totalSubscriptions: 0 }),
+      },
+
+      performance: {
+        memoryUsageMB,
+        cpuUsagePercent: null, // Would require additional library
+      },
+    };
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(response, null, 2));
+  }
+
+  /**
+   * Get connection state for a connector.
+   */
+  private getConnectionState(connector: unknown): string {
+    if (!connector || typeof connector !== "object") {
+      return "disconnected";
+    }
+
+    // Try to get state from connector
+    const conn = connector as { getHealth?: () => { isConnected: boolean } };
+    if (typeof conn.getHealth === "function") {
+      const health = conn.getHealth();
+      if (health.isConnected) {
+        return "connected";
+      }
+    }
+
+    return "disconnected";
   }
 }
 
