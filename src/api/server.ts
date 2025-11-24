@@ -7,6 +7,7 @@
 import { createServer, IncomingMessage, ServerResponse } from "http";
 import { URL } from "url";
 import { logger } from "../utils/logger.js";
+import { getArbitrageOpportunities } from "../compute/cross-exchange.js";
 import type { MarketStore } from "../store/markets.js";
 import type { LeaderboardStore } from "../store/leaderboards.js";
 import type { EnhancedLeaderboardStore } from "../store/enhanced-leaderboards.js";
@@ -568,7 +569,6 @@ export class ApiServer {
       return;
     }
 
-    const { getArbitrageOpportunities } = require("../compute/cross-exchange.js");
     const opportunities = getArbitrageOpportunities(this.aggregatedStore);
     const limit = parseInt(url.searchParams.get("limit") || "20", 10);
 
