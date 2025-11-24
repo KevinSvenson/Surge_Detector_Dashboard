@@ -1,0 +1,46 @@
+{
+  "exchanges": {
+    "binance": {
+      "enabled": true,
+      "symbols": "top50"
+    },
+    "bybit": {
+      "enabled": true,
+      "symbols": "top100"
+    },
+    "okx": {
+      "enabled": false,
+      "symbols": "top100"
+    },
+    "hyperliquid": {
+      "enabled": false,
+      "addressScanCount": 1000
+    }
+  },
+  "rolling": {
+    "tradeBucketSizeMs": 1000,
+    "tradeBucketCount": 14400,
+    "priceBucketSizeMs": 1000,
+    "priceBucketCount": 86400
+  },
+  "compute": {
+    "derivedMetricsIntervalMs": 250,
+    "leaderboardUpdateIntervalMs": 100,
+    "compositeScoreIntervalMs": 1000
+  },
+  "hyperliquid": {
+    "priorityScanIntervalMs": 10000,
+    "backgroundScanIntervalMs": 60000,
+    "maxParallelScans": 20,
+    "atRiskThresholdPercent": 5
+  },
+  "performance": {
+    "maxSymbolsPerExchange": 200,
+    "maxLeaderboardSize": 500,
+    "targetQueryLatencyMs": 50
+  },
+  "logging": {
+    "level": "info"
+  }
+}
+
